@@ -12,9 +12,11 @@ M.tostring = tostring
 M.assert = assert
 M.math = math
 M.require = require
+M.ipairs = ipairs
 M.io = io
 M.file = file
-M.Mesh = require "hedge.hedge".Mesh
+M.hedge_module = require "hedge.hedge"
+M.Mesh = M.hedge_module.Mesh
 M.print = print
 
 _ENV = M
@@ -22,6 +24,17 @@ _ENV = M
 -- DEBUG STUFF -----------------------------------------------------{{{
 debug_mode = false
 output_algo = false
+enable_trace = true
+
+function trace(...)
+    for _,s in ipairs({...}) do
+        if _ > 1 then
+            io.stderr:write(" ")
+        end
+        io.stderr:write(s)
+    end
+    io.stderr:write("\n")
+end
 
 symbolic_supertriangle = false
 
@@ -68,6 +81,8 @@ W dup scale
 minx neg miny neg translate
 /meshctm matrix currentmatrix def
 
+matrix defaultmatrix setmatrix
+
 %%EndSetup
 ]],
     "\n")
@@ -93,6 +108,8 @@ vtxfont setfont
 
 ]])
 
+    math.randomseed(666)
+
     if dag ~= nil then
         local function printer(node)
             if node.children ~= nil then
@@ -107,7 +124,7 @@ vtxfont setfont
                           P[node[1]].x," ",P[node[1]].y," moveto\n",
                           P[node[2]].x," ",P[node[2]].y," lineto\n",
                           P[node[3]].x," ",P[node[3]].y," lineto\n",
-                          math.random()," 1 1 sethsbcolor\n",
+                          math.random()," ",math.random()," ",math.random()," sethsbcolor\n",
                           "closepath fill\n")
             end
         end
@@ -148,11 +165,10 @@ function output_mesh(out, P, mesh, dag, msg)
         P, mesh, dag, msg = out, P, mesh, dag
 
         if type(mesh_output_stream) == "string" then
-            out = io.open(out, "a+") -- append
+            out = io.open(mesh_output_stream, "a+") -- append
         else
             out = mesh_output_stream
         end
-        ps_header(out, bounds(P))
         curpage = curpage + 1
     else
         mesh_output_stream = out
@@ -441,7 +457,8 @@ local function is_illegal_edge(P, edge, p)
     local center,radius2 = circumcircle(P[i], P[j], P[k])
 
     -- if p is in the interior of circumcircle, edge is illegal
-    return norm2(center-P[p]) <= radius2
+    trace(norm2(center-P[p]), radius2)
+    return norm2(center-P[p]) < radius2
 end
 
 

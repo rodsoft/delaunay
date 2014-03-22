@@ -1,6 +1,10 @@
 local d = require "delaunay"
 local gold = require "gold"
 
+d.debug_mode = true
+d.hedge_module.debug_mode = true
+d.hedge_module.enable_trace = true
+
 function gen_points(N)
     local P = {}
     for i=1,N do
@@ -117,11 +121,13 @@ function benchmark(N)
 end
 
 function get_points(val)
+    d.output_algo = true
     if val == "square" then
         return {{x=0,y=0},{x=1,y=0},{x=0,y=1},{x=1,y=1}}
     elseif val == "on_edge" then
         return {{x=0,y=0},{x=1,y=0},{x=1,y=1},{x=0.5,y=0.5}}
     else
+        d.output_algo = false
         return gen_points(tonumber(val))
     end
 end
