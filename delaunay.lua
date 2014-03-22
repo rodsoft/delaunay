@@ -609,8 +609,9 @@ function triangulate(P)
 end
 
 function randomize(P)
-    for i=1,#P do
-        local j = i+math.floor(math.random()*(#P-i))
+    --  http://en.wikipedia.org/wiki/Fisher-Yates_shuffle
+    for i=#P,2,-1 do
+        local j = math.random(i)
         P[i],P[j] = P[j],P[i]
     end
     return P
