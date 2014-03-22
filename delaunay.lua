@@ -23,6 +23,8 @@ _ENV = M
 debug_mode = false
 output_algo = false
 
+symbolic_supertriangle = false
+
 function ps_header(out, min, max)
     min = min - (max-min)/10
     max = max + (max-min)/10
@@ -305,39 +307,37 @@ local function top_point(P)
 end
 
 local function ccw(P, a, b, p)
-    --[[
-    if a < 0 or b < 0 then
+    if symbolic_supertriangle and (a < 0 or b < 0) then
         if a == -1 and b == -2 then
             return 1
         elseif a == -2 and b == -1 then
             return -1
         elseif a == -1 then
-            if P[p] > P[b] then
+            if not Point.__le(P[p],P[b]) then
                 return 1
             else
                 return -1
             end
         elseif b == -2 then
-            if P[p] > P[a] then
+            if not Point.__le(P[p],P[a]) then
                 return 1
             else
                 return -1
             end
         elseif a == -2 then
-            if P[p] > P[b] then
+            if not Point.__le(P[p],P[b]) then
                 return -1
             else
                 return 1
             end
         elseif b == -1 then
-            if P[p] > P[a] then
+            if not Point.__le(P[p],P[a]) then
                 return -1
             else
                 return 1
             end
         end
     end
-    --]]
 
     a = P[a]
     b = P[b]
@@ -430,15 +430,13 @@ local function is_illegal_edge(P, edge, p)
         assert(p ~= i)
     end
 
-    --[[
-    if i<0 or j<0 or k<0 or p<0 then
+    if symbolic_supertriangle and (i<0 or j<0 or k<0 or p<0) then
         -- at most one of i,j is < 0
         assert(i>=0 and j>=0 or (i<0) ~= (j<0)) -- xor
         -- at most one of k,p is < 0
         assert(k>=0 and p>=0 or (k<0) ~= (p<0)) -- xor
         return math.min(k,p) >= math.min(i,j)
     end
-    --]]
 
     local center,radius2 = circumcircle(P[i], P[j], P[k])
 
@@ -464,7 +462,7 @@ local function legalize_edge(mesh, P, dag, edge, p, trinode)
         end
         local did = mesh:flip_edge(edge)
         if debug_mode then
-            assert(did)
+            assert(did, "should have flipped "..tostring(edge))
         end
 
         local node, node_opp = trinode[edge.face.id], trinode[edge.opp.face.id]
@@ -535,7 +533,6 @@ end
 
 local function mega_triangle(P)
     local min,max = bounds(P)
-    --[[
 
     local size = max-min
     min = min - size/10
@@ -548,17 +545,6 @@ local function mega_triangle(P)
     return Point:new(min.x-d,min.y),
            Point:new(max.x+d,min.y),
            Point:new((min.x+max.x)/2, max.y+c)
-           --]]
-
-  local dx, dy = max.x - min.x, max.y - min.y
-  local deltaMax = math.max(dx, dy)
-  local midx, midy = (min.x + max.x) * 0.5, (min.y + max.y) * 0.5
-
-  local p1 = Point:new(midx - 2 * deltaMax, midy - deltaMax)
-  local p2 = Point:new(midx, midy + 2 * deltaMax)
-  local p3 = Point:new(midx + 2 * deltaMax, midy - deltaMax)
-
-  return p1,p3,p2
 end
 
 function randomize(P)
@@ -571,20 +557,6 @@ function randomize(P)
 end
 
 function triangulate(P)
-    --[[
-    local id0 = top_point(P)
-    P[0],P[id0] = P[id0],P[0]
-
-    local mesh = Mesh:new()
-
-    local root = {}
-    root[1] = 0
-    root[2] = -2
-    root[3] = -1
-
-    local f0  = mesh:add_face(0,-2,-1)
-    --]]
-
     local trinode = {}
     function trinode:create(parent,e)
         local node = {tri = e.face}
@@ -600,10 +572,17 @@ function triangulate(P)
         return node
     end
 
-    P[-1], P[-2], P[-3] = mega_triangle(P)
-
     local mesh = Mesh:new()
-    local f0 =  mesh:add_face(-1,-2,-3)
+
+    local f0, id0
+
+    if symbolic_supertriangle then
+        id0 = top_point(P)
+        f0 =  mesh:add_face(id0,-2,-1)
+    else
+        P[-1], P[-2], P[-3] = mega_triangle(P)
+        f0 =  mesh:add_face(-1,-2,-3)
+    end
 
     local root = {tri = f0}
     root[1] = f0[1].vtx.id
@@ -616,8 +595,7 @@ function triangulate(P)
     end
 
     for p,pr in pairs(P) do
-
-        if p <= 0 then
+        if p <= 0 or p == id0 then
             goto continue
         end
 
@@ -684,14 +662,16 @@ function triangulate(P)
 
             local edges = {}
             for e in vtx:out_edges() do
-                edges[#edges+1] = e
+                if e.face ~= nil then -- no need to process border edges
+                    edges[#edges+1] = e
 
-                if e.prev.vtx == opp_vtx then
-                    if opp_node ~= nil then
-                        trinode:create(opp_node,e)
+                    if e.prev.vtx == opp_vtx then
+                        if opp_node ~= nil then
+                            trinode:create(opp_node,e)
+                        end
+                    else
+                        trinode:create(node,e)
                     end
-                else
-                    trinode:create(node,e)
                 end
             end
 
