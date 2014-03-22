@@ -505,15 +505,10 @@ function triangulate(P)
         node[1] = e.vtx.id
         node[2] = e.next.vtx.id
         node[3] = e.prev.vtx.id
-        if parent ~= nil then
-            node.level = parent.level+1
-            if parent.children == nil then
-                parent.children = {}
-            end
-            parent.children[#parent.children + 1] = node
-        else
-            node.level = 0
+        if parent.children == nil then
+            parent.children = {}
         end
+        parent.children[#parent.children + 1] = node
 
         trinode[e.face.id] = node
         return node
@@ -524,7 +519,11 @@ function triangulate(P)
     local mesh = Mesh:new()
     local f0 =  mesh:add_face(-1,-2,-3)
 
-    local root = trinode:create(nil,f0[1])
+    local root = {tri = f0}
+    root[1] = f0[1].vtx.id
+    root[2] = f0[2].vtx.id
+    root[3] = f0[3].vtx.id
+    trinode[f0.id] = root
     
     --printmesh(P,mesh,root,"super triangle")
 
