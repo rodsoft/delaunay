@@ -399,7 +399,7 @@ function legalize_edge(mesh, P, dag, edge, p, trinode)
     assert(edge.next.next.vtx.id == p)
 
     if is_illegal_edge(P, edge, p) then
-        local msg = "flip "..tostring(edge).." p="..p
+        --local msg = "flip "..tostring(edge).." p="..p
         local did = mesh:flip_edge(edge)
         assert(did)
 
@@ -414,7 +414,7 @@ function legalize_edge(mesh, P, dag, edge, p, trinode)
         node_opp.children[#node_opp.children+1] = child
         node_opp.children[#node_opp.children+1] = child_opp
 
-        printmesh(P,mesh,dag, msg)
+        --printmesh(P,mesh,dag, msg)
 
         assert(not is_illegal_edge(P, edge, edge.prev.vtx.id), "should be a legal edge by now")
 
@@ -526,7 +526,7 @@ function triangulate(P)
 
     local root = trinode:create(nil,f0[1])
     
-    printmesh(P,mesh,root,"super triangle")
+    --printmesh(P,mesh,root,"super triangle")
 
     for p,pr in pairs(P) do
         if p <= 0 then
@@ -537,7 +537,7 @@ function triangulate(P)
         assert(node ~= nil, "must have found a triangle")
 
         if strictly_inside_triangle(P, node, p) then
-            local msg = "split "..tostring(node.tri).." with "..p
+            --local msg = "split "..tostring(node.tri).." with "..p
             local vtx = add_vertex_interior(mesh, node.tri, p)
 
             local edges = {}
@@ -548,7 +548,7 @@ function triangulate(P)
 
             assert(#node.children == 3, "wrong number of children: "..#node.children)
 
-            printmesh(P,mesh,root,msg)
+            --printmesh(P,mesh,root,msg)
 
             for i=1,#edges do
                 legalize_edge(mesh, P, root, edges[i].next, p, trinode)
@@ -574,7 +574,7 @@ function triangulate(P)
                 assert(opp_node ~= nil)
             end
 
-            local msg = "split "..tostring(edge)
+            --local msg = "split "..tostring(edge)
             local vtx = add_vertex_edge(mesh, edge, p)
 
             for e in vtx:out_edges() do
@@ -589,7 +589,7 @@ function triangulate(P)
                 end
             end
 
-            printmesh(P,mesh,root,msg)
+            --printmesh(P,mesh,root,msg)
 
             for i=1,#edges do
                 legalize_edge(mesh, P, root, edges[i].next, p, trinode)
@@ -602,7 +602,7 @@ function triangulate(P)
     for i=-3,-1 do
         mesh:remove_vertex(i)
         P[i] = nil
-        printmesh(P,mesh,nil,"Remove vertex "..i)
+        --printmesh(P,mesh,nil,"Remove vertex "..i)
     end
 
     return mesh, P
