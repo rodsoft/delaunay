@@ -454,11 +454,17 @@ local function is_illegal_edge(P, edge, p)
         return math.min(k,p) >= math.min(i,j)
     end
 
-    local center,radius2 = circumcircle(P[i], P[j], P[k])
+    local center,r2 = circumcircle(P[i], P[j], P[k])
 
     -- if p is in the interior of circumcircle, edge is illegal
-    trace(norm2(center-P[p]), radius2)
-    return norm2(center-P[p]) < radius2
+    local d2 = norm2(center-P[p])
+    trace(d2, r2)
+    local rerr = math.abs((d2-r2)/r2)
+    if rerr <= 1e-10 then
+        return false
+    else
+        return d2 < r2
+    end
 end
 
 
