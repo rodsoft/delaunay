@@ -4,6 +4,8 @@ local gold = require "gold"
 d.debug_mode = true
 d.hedge_module.debug_mode = true
 d.hedge_module.enable_trace = true
+d.enable_trace = true
+d.symbolic_supertriangle = false
 
 function gen_points(N)
     local P = {}
@@ -112,6 +114,11 @@ function output_gold(iP, out)
 end
 
 function benchmark(N)
+    d.debug_mode = false
+    d.hedge_module.debug_mode = false
+    d.hedge_module.enable_trace = false
+    d.enable_trace = false
+
     local P = gen_points(N)
 
     local clk = os.clock()
@@ -123,7 +130,7 @@ end
 function get_points(val)
     d.output_algo = true
     if val == "square" then
-        return {{x=0,y=0},{x=1,y=0},{x=0,y=1},{x=1,y=1}}
+        return {{x=0,y=0},{x=1,y=1e-5},{x=0,y=1},{x=1,y=1}}
     elseif val == "on_edge" then
         return {{x=0,y=0},{x=1,y=0},{x=1,y=1},{x=0.5,y=0.5}}
     else

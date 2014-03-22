@@ -17,14 +17,13 @@ M.io = io
 M.file = file
 M.hedge_module = require "hedge.hedge"
 M.Mesh = M.hedge_module.Mesh
-M.print = print
 
 _ENV = M
 
 -- DEBUG STUFF -----------------------------------------------------{{{
 debug_mode = false
 output_algo = false
-enable_trace = true
+enable_trace = false
 
 function trace(...)
     for _,s in ipairs({...}) do
@@ -120,12 +119,16 @@ vtxfont setfont
                 assert(P ~= nil)
                 assert(out ~= nil)
 
-                out:write("newpath\n",
-                          P[node[1]].x," ",P[node[1]].y," moveto\n",
-                          P[node[2]].x," ",P[node[2]].y," lineto\n",
-                          P[node[3]].x," ",P[node[3]].y," lineto\n",
-                          math.random()," ",math.random()," ",math.random()," sethsbcolor\n",
-                          "closepath fill\n")
+                local a,b,c = P[node[1]],P[node[2]],P[node[3]]
+
+                if a ~= nil and b ~= nil and c ~= nil then
+                    out:write("newpath\n",
+                              a.x," ",a.y," moveto\n",
+                              b.x," ",b.y," lineto\n",
+                              c.x," ",c.y," lineto\n",
+                              math.random()," ",math.random()," ",math.random()," setrgbcolor\n",
+                              "closepath fill\n")
+                end
             end
         end
 
@@ -143,8 +146,11 @@ vtxfont setfont
             in_red = false
         end
 
-        out:write(P[e.vtx.id].x, " ",P[e.vtx.id].y,
-                  " ", P[e.next.vtx.id].x, " ", P[e.next.vtx.id].y, " line\n")
+        local a,b = P[e.vtx.id], P[e.next.vtx.id]
+
+        if a ~= nil and b ~= nil then
+            out:write(a.x, " ",a.y, " ", b.x, " ", b.y, " line\n")
+        end
     end
 
     if #P < 10 then
@@ -235,12 +241,6 @@ end
 function Point:__tostring()
     return "("..self.x..";"..self.y..")"
 end
-
-local function are_collinear(a, b, c)
-    local tol = math.abs(math.max(a.x,b.x,c.x,a.y,b.y,c.y))*1e-6
-
-    return math.abs(cross(Vector:new(b.x,b.y)-a,Vector:new(c.x,c.y)-a)) < tol
-end
 --}}}
 
 -- VECTOR ---------------------------------------------------------------{{{
@@ -322,6 +322,16 @@ local function top_point(P)
     return id0
 end
 
+-- order y, then x
+local function ptgt(a,b)
+    if a.y == b.y then
+        return a.x > b.y
+    else
+        return a.y > b.y
+    end
+end
+
+-- ccw < 0 -> to the left
 local function ccw(P, a, b, p)
     if symbolic_supertriangle and (a < 0 or b < 0) then
         if a == -1 and b == -2 then
@@ -329,25 +339,25 @@ local function ccw(P, a, b, p)
         elseif a == -2 and b == -1 then
             return -1
         elseif a == -1 then
-            if not Point.__le(P[p],P[b]) then
+            if ptgt(P[p],P[b]) then
                 return 1
             else
                 return -1
             end
         elseif b == -2 then
-            if not Point.__le(P[p],P[a]) then
+            if ptgt(P[p],P[a]) then
                 return 1
             else
                 return -1
             end
         elseif a == -2 then
-            if not Point.__le(P[p],P[b]) then
+            if ptgt(P[p],P[b]) then
                 return -1
             else
                 return 1
             end
         elseif b == -1 then
-            if not Point.__le(P[p],P[a]) then
+            if ptgt(P[p],P[a]) then
                 return -1
             else
                 return 1
@@ -363,6 +373,10 @@ local function ccw(P, a, b, p)
     local d10, d11 = b.x-a.x, b.y-a.y
 
     return d00*d11 - d01*d10
+end
+
+local function are_collinear(P, a, b, c)
+    return ccw(P,a,b,c) == 0
 end
 
 local function inside_triangle(P, tri, p)
@@ -458,7 +472,6 @@ local function is_illegal_edge(P, edge, p)
 
     -- if p is in the interior of circumcircle, edge is illegal
     local d2 = norm2(center-P[p])
-    trace(d2, r2)
     local rerr = math.abs((d2-r2)/r2)
     if rerr <= 1e-10 then
         return false
@@ -494,10 +507,11 @@ local function legalize_edge(mesh, P, dag, edge, p, trinode)
         local child_opp = trinode:create(node,edge.opp)
 
         if node_opp.children == nil then
-            node_opp.children = {}
+            node_opp.children = {child,child_opp}
+        else
+            node_opp.children[#node_opp.children+1] = child
+            node_opp.children[#node_opp.children+1] = child_opp
         end
-        node_opp.children[#node_opp.children+1] = child
-        node_opp.children[#node_opp.children+1] = child_opp
 
         if output_algo then
             output_mesh(P,mesh,dag, msg)
@@ -506,15 +520,8 @@ local function legalize_edge(mesh, P, dag, edge, p, trinode)
             assert(not is_illegal_edge(P, edge, edge.prev.vtx.id), "should be a legal edge by now")
         end
 
-        local e1 = edge.next
-              e2 = edge.opp.prev
-        local a = e2.vtx.id
-        local b = e2.next.vtx.id
-        legalize_edge(mesh, P, dag, e1, p, trinode)
-
-        if e2.vtx.id == a and e2.next.vtx.id == b then
-            legalize_edge(mesh, P, dag, e2, p, trinode)
-        end
+        legalize_edge(mesh, P, dag, edge.next, p, trinode)
+        legalize_edge(mesh, P, dag, edge.opp.prev, p, trinode)
     end
 end
 
@@ -558,8 +565,8 @@ local function mega_triangle(P)
     local min,max = bounds(P)
 
     local size = max-min
-    min = min - size/10
-    max = max + size/10
+    min = min - size*10
+    max = max + size*10
 
     local w,h = max.x-min.x, max.y-min.y
     local d = w/2
@@ -636,7 +643,9 @@ function triangulate(P)
 
             local edges = {}
             for e in vtx:out_edges() do
-                edges[#edges+1] = e
+                if e.opp.next.face ~= nil then
+                    edges[#edges+1] = e
+                end
                 trinode:create(node,e)
             end
 
@@ -653,17 +662,25 @@ function triangulate(P)
                 legalize_edge(mesh, P, root, edges[i].next, p, trinode)
             end
         else
-            local a,b,c = P[node[1]], P[node[2]], P[node[3]]
             local edge
-            if are_collinear(a,b,pr) then
-                edge = node.tri[1]
-            elseif are_collinear(b,c,pr) then
-                edge = node.tri[2]
-            else
-                if debug_mode then
-                    assert(are_collinear(c,a,pr))
+            if are_collinear(P, node[1], node[2], p) then
+                if enable_trace then
+                    trace(node[1], node[2], p, " collinear")
                 end
-                edge = node.tri[3]
+                edge = mesh:get_edge(node[1],node[2])
+            elseif are_collinear(P, node[2], node[3], p) then
+                if enable_trace then
+                    trace(node[2], node[3], p, " collinear")
+                end
+                edge = mesh:get_edge(node[2],node[3])
+            else
+                if enable_trace then
+                    trace(node[3], node[1], p, " collinear")
+                end
+                if debug_mode then
+                    assert(are_collinear(P, node[3], node[1], p))
+                end
+                edge = mesh:get_edge(node[3],node[1])
             end
 
             local opp_tri = edge.opp.face
@@ -686,7 +703,9 @@ function triangulate(P)
             local edges = {}
             for e in vtx:out_edges() do
                 if e.face ~= nil then -- no need to process border edges
-                    edges[#edges+1] = e
+                    if e.opp.next.face ~= nil then
+                        edges[#edges+1] = e
+                    end
 
                     if e.prev.vtx == opp_vtx then
                         if opp_node ~= nil then
