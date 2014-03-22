@@ -250,7 +250,7 @@ function top_point(P)
         end
     end
 
-    assert(id0 ~= nil)
+    --assert(id0 ~= nil)
 
     return id0
 end
@@ -324,7 +324,7 @@ function find_triangle(P, node, p)
         end
     end
 
-    assert(false, "must have found a triangle containing "..p.." ("..node[1].." "..node[2].." "..node[3]..")")
+    --assert(false, "must have found a triangle containing "..p.." ("..node[1].." "..node[2].." "..node[3]..")")
 end
 
 function circumcircle(a,b,c)
@@ -357,7 +357,7 @@ function is_illegal_edge(P, edge, p)
                   edge.opp.prev.vtx.id
 
     --print("is illegal ",edge,i,j,k,p)
-    assert(p ~= edge.vtx.id and p ~= edge.next.vtx.id)
+    --assert(p ~= edge.vtx.id and p ~= edge.next.vtx.id)
 
     -- border edge is always legal
     if edge.face == nil or edge.opp.face == nil then
@@ -368,17 +368,17 @@ function is_illegal_edge(P, edge, p)
                   edge.next.vtx.id,
                   edge.opp.prev.vtx.id
 
-    assert(i ~= j)
-    assert(j ~= k)
-    assert(k ~= p)
-    assert(p ~= i)
+    --assert(i ~= j)
+    --assert(j ~= k)
+    --assert(k ~= p)
+    --assert(p ~= i)
 
     --[[
     if i<0 or j<0 or k<0 or p<0 then
         -- at most one of i,j is < 0
-        assert(i>=0 and j>=0 or (i<0) ~= (j<0)) -- xor
+        --assert(i>=0 and j>=0 or (i<0) ~= (j<0)) -- xor
         -- at most one of k,p is < 0
-        assert(k>=0 and p>=0 or (k<0) ~= (p<0)) -- xor
+        --assert(k>=0 and p>=0 or (k<0) ~= (p<0)) -- xor
         return math.min(k,p) >= math.min(i,j)
     end
     --]]
@@ -392,16 +392,16 @@ end
 
 function legalize_edge(mesh, P, dag, edge, p, trinode)
     --print("legalize ",edge,p)
-    assert(edge.vtx.id ~= p)
-    assert(edge.next.vtx.id ~= p)
+    --assert(edge.vtx.id ~= p)
+    --assert(edge.next.vtx.id ~= p)
 
-    assert(edge.prev.vtx.id == p)
-    assert(edge.next.next.vtx.id == p)
+    --assert(edge.prev.vtx.id == p)
+    --assert(edge.next.next.vtx.id == p)
 
     if is_illegal_edge(P, edge, p) then
         --local msg = "flip "..tostring(edge).." p="..p
         local did = mesh:flip_edge(edge)
-        assert(did)
+        --assert(did)
 
         local node, node_opp = trinode[edge.face.id], trinode[edge.opp.face.id]
 
@@ -416,7 +416,7 @@ function legalize_edge(mesh, P, dag, edge, p, trinode)
 
         --printmesh(P,mesh,dag, msg)
 
-        assert(not is_illegal_edge(P, edge, edge.prev.vtx.id), "should be a legal edge by now")
+        --assert(not is_illegal_edge(P, edge, edge.prev.vtx.id), "should be a legal edge by now")
 
         local e1 = edge.next
               e2 = edge.opp.prev
@@ -534,7 +534,7 @@ function triangulate(P)
         end
 
         local node = find_triangle(P, root, p)
-        assert(node ~= nil, "must have found a triangle")
+        --assert(node ~= nil, "must have found a triangle")
 
         if strictly_inside_triangle(P, node, p) then
             --local msg = "split "..tostring(node.tri).." with "..p
@@ -546,7 +546,7 @@ function triangulate(P)
                 trinode:create(node,e)
             end
 
-            assert(#node.children == 3, "wrong number of children: "..#node.children)
+            --assert(#node.children == 3, "wrong number of children: "..#node.children)
 
             --printmesh(P,mesh,root,msg)
 
@@ -561,7 +561,7 @@ function triangulate(P)
             elseif are_collinear(b,c,pr) then
                 edge = node.tri[2]
             else 
-                assert(are_collinear(c,a,pr))
+                --assert(are_collinear(c,a,pr))
                 edge = node.tri[3]
             end
 
@@ -571,7 +571,7 @@ function triangulate(P)
             if opp_tri ~= nil then
                 opp_vtx = edge.opp.prev.vtx
                 opp_node = trinode[opp_tri.id]
-                assert(opp_node ~= nil)
+                --assert(opp_node ~= nil)
             end
 
             --local msg = "split "..tostring(edge)
