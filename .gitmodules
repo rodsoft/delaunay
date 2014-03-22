@@ -1,0 +1,3 @@
+[submodule "hedge"]
+	path = hedge
+	url = https://github.com/rodsoft/hedge

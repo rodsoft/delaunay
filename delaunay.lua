@@ -1,6 +1,142 @@
-local mesh = require "mesh.mesh"
+local hedge = require "hedge.hedge"
+local gold = require "gold"
 
-local Mesh = mesh.Mesh
+local Mesh = hedge.Mesh
+local trace = hedge.trace
+
+function ps_header(out, min, max)
+    min = min - (max-min)/10
+    max = max + (max-min)/10
+
+    out:write("%!PS-Adobe-3.0\n",
+             ("%%%%BoundingBox: %f %f %f %f\n")
+                :format(min.x,min.y,max.x,max.y),
+              "%%EndComments\n",
+              "%%BeginSetup\n",
+              ("/minx %f def /miny %f def /maxx %f def /maxy %f def\n")
+                :format(min.x,min.y,max.x,max.y),
+[[
+/W 612 def /H 792 def
+/w maxx minx sub def /h maxy miny sub def
+/radius 1 W div def
+/red {1 0 0} def
+/green {0 1 0} def
+/blue {0 0 1} def
+/white {1 1 1} def
+/black {0 0 0} def
+/p %% p(x,y)
+{
+    newpath radius 0 360 arc fill
+} def
+/line %% line(x1,y1,x2,y2)
+{
+    newpath 4 2 roll moveto lineto stroke
+} def
+
+/vtxfont /Times-Roman findfont 20 h mul H div scalefont def
+/titlefont /Times-Roman findfont 30 scalefont def
+
+/print
+{
+    3 1 roll moveto w h div 1 scale show h w div 1 scale 
+} def
+
+0 H W sub 2 div translate
+W dup scale
+1 w div 1 h div scale
+minx neg miny neg translate
+/meshctm matrix currentmatrix def
+
+%%EndSetup
+]],
+    "\n")
+end
+
+function output_ps(P, mesh, dag, out, title)
+    if title ~= nil then
+        out:write(("titlefont setfont (%s) dup stringwidth pop W exch sub 2 div H moveto show\n")
+                    :format(title))
+    end
+
+    local in_red = false
+
+    out:write([[
+
+0 0 1 setrgbcolor
+1 W div setlinewidth
+meshctm setmatrix
+vtxfont setfont
+
+]])
+
+    if dag ~= nil then
+        local function printer(node)
+            if node.children ~= nil then
+                for _,child in pairs(node.children) do
+                    printer(child)
+                end
+            else
+                out:write("newpath\n",
+                          P[node[1]].x," ",P[node[1]].y," moveto\n",
+                          P[node[2]].x," ",P[node[2]].y," lineto\n",
+                          P[node[3]].x," ",P[node[3]].y," lineto\n",
+                          math.random()," 1 1 sethsbcolor\n",
+                          "closepath fill\n")
+            end
+        end
+
+        printer(dag)
+    end
+
+    for _,e in pairs(mesh.edges) do
+        if e.vtx.id < 0 or e.next.vtx.id < 0 then
+            if not in_red then
+                out:write("1 0 0 setrgbcolor\n")
+                in_red = true
+            end
+        elseif in_red then
+            out:write("0 0 1 setrgbcolor\n")
+            in_red = false
+        end
+
+        out:write(P[e.vtx.id].x, " ",P[e.vtx.id].y,
+                  " ", P[e.next.vtx.id].x, " ", P[e.next.vtx.id].y, " line\n")
+    end
+
+    if #P < 10 then
+        out:write("0 0 0 setrgbcolor\n")
+        for _,p in pairs(P) do
+            out:write(p.x," ",p.y," (",_,") print\n")
+        end
+    end
+end
+
+local idx = 1
+function printmesh(P, mesh, dag, msg)
+    do return end
+
+    local out
+    if idx == 1 then
+        out = io.open("algo.ps","w+")
+
+        ps_header(out, bounds(P))
+    else
+        out = io.open("algo.ps","a+")
+    end
+
+    out:write("%%Page ",idx," ",idx,"\n")
+
+    out:write("gsave\n")
+
+    output_ps(P,mesh,dag,out,msg)
+
+    out:write("grestore\n","showpage\n")
+
+    out:close()
+
+    idx = idx+1
+end
+
 
 -- POINT ---------------------------------------------------------------
 
@@ -20,24 +156,24 @@ function Point.__eq(a,b)
 end
 -- lexicographical order
 function Point.__lt(a,b) 
-    if a.y==b.y then 
-        return a.x < b.x
-    else
+    if a.x==b.x then 
         return a.y < b.y
+    else
+        return a.x < b.x
     end
 end
 function Point.__le(a,b) 
-    if a.y==b.y then 
-        return a.x <= b.x
-    else
+    if a.x==b.x then 
         return a.y <= b.y
+    else
+        return a.x <= b.x
     end
 end
 function Point:__tostring()
     return "("..self.x..";"..self.y..")"
 end
 
-function is_collinear(a, b, c)
+function are_collinear(a, b, c)
     local tol = math.abs(math.max(a.x,b.x,c.x,a.y,b.y,c.y))*1e-6
 
     return math.abs(cross(b-a,c-a)) < tol
@@ -61,7 +197,7 @@ function Vector.__add(a,b)
     return Vector:new(a.x+b.x, a.y+b.y)
 end
 function Vector.__unm(a)
-    return Vector:new(-b.x, -b.y)
+    return Vector:new(-a.x, -a.y)
 end
 function Vector.__mul(a,b)
     if type(a) == 'number' then
@@ -103,32 +239,61 @@ end
 
 ------------------------------------------------------------
 
-local idx = 1
-function printmesh(mesh, name)
-    mesh:output_dot(io.open(idx.."_"..name..".dot","w"))
-    idx = idx+1
-end
-
-function hull_triangle(P)
-    local min, max = Point:new(1e10,1e10), Point:new(-1e10,-1e10)
+function top_point(P)
+    local max = Point:new(-1e10,-1e10)
+    local id0
 
     for i=1,#P do
-        min.x = math.min(min.x, P[i].x)
-        min.y = math.min(min.y, P[i].y)
-        max.x = math.max(max.x, P[i].x)
-        max.y = math.max(max.y, P[i].y)
+        if P[i].y > max.y or P[i].y == max.y and P[i].x > max.x then
+            max = P[i]
+            id0 = i
+        end
     end
 
-    local d = (max-min)*10
+    assert(id0 ~= nil)
 
-    local stv0 = Point:new(min.x - d.x, min.y - d.y*3)
-    local stv1 = Point:new(min.x - d.x, max.y + d.y)
-    local stv2 = Point:new(max.x + d.x*3, max.y + d.y)
-
-    return {stv0, stv2, stv1}
+    return id0
 end
 
-function ccw(a, b, p)
+function ccw(P, a, b, p)
+    --[[
+    if a < 0 or b < 0 then
+        if a == -1 and b == -2 then
+            return 1
+        elseif a == -2 and b == -1 then
+            return -1
+        elseif a == -1 then
+            if P[p] > P[b] then
+                return 1
+            else
+                return -1
+            end
+        elseif b == -2 then
+            if P[p] > P[a] then
+                return 1
+            else
+                return -1
+            end
+        elseif a == -2 then
+            if P[p] > P[b] then
+                return -1
+            else
+                return 1
+            end
+        elseif b == -1 then
+            if P[p] > P[a] then
+                return -1
+            else
+                return 1
+            end
+        end
+    end
+    --]]
+
+    a = P[a]
+    b = P[b]
+    p = P[p]
+
     local d00, d01 = p.x-a.x, p.y-a.y
     local d10, d11 = b.x-a.x, b.y-a.y
 
@@ -136,20 +301,19 @@ function ccw(a, b, p)
 end
 
 function inside_triangle(P, tri, p)
-    local a,b,c,p = P[tri[1]], P[tri[2]], P[tri[3]], P[p]
-
-    return ccw(a,b,p) <= 0 and ccw(b,c,p) <= 0 and ccw(c,a,p) <= 0
+    local a,b,c = tri[1], tri[2], tri[3]
+    return ccw(P,a,b,p) <= 0 and ccw(P,b,c,p) <= 0 and ccw(P,c,a,p) <= 0
 end
 
 function strictly_inside_triangle(P, tri, p)
-    local a,b,c,p = P[tri[1]], P[tri[2]], P[tri[3]], P[p]
-    return ccw(a,b,p) < 0 and ccw(b,c,p) < 0 and ccw(c,a,p) < 0
+    local a,b,c = tri[1], tri[2], tri[3]
+    return ccw(P,a,b,p) < 0 and ccw(P,b,c,p) < 0 and ccw(P,c,a,p) < 0
 end
 
 function find_triangle(P, node, p)
     if not inside_triangle(P, node, p) then
         return nil
-    elseif node.children == nil then
+    elseif node.children == nil then -- leaf node?
         return node
     end
 
@@ -160,141 +324,275 @@ function find_triangle(P, node, p)
         end
     end
 
-    assert(false, "must have found a triangle")
+    assert(false, "must have found a triangle containing "..p.." ("..node[1].." "..node[2].." "..node[3]..")")
 end
 
+function circumcircle(a,b,c)
+    local D = (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y)) * 2
 
-function is_illegal_edge(P, edge)
+    local x = norm2(a) * (b.y - c.y) +
+              norm2(b) * (c.y - a.y) +
+              norm2(c) * (a.y - b.y)
+
+    local y = norm2(a) * (c.x - b.x) +
+              norm2(b) * (a.x - c.x) +
+              norm2(c) * (b.x - a.x)
+
+    local center = Point:new((x / D), (y / D))
+
+
+    local la,lb,lc = norm(a-b), norm(b-c), norm(c-a)
+
+    -- area*4 of ijk triangle (use Heron's formula)
+    local area4 = math.sqrt((la+lb+lc)*(la+lb-lc)*(la-lb+lc)*(-la+lb+lc))
+    local radius = (la*lb*lc)/area4
+
+    return center,radius
+end
+
+function is_illegal_edge(P, edge, p)
+
+    local i,j,k = edge.vtx.id,
+                  edge.next.vtx.id,
+                  edge.opp.prev.vtx.id
+
+    --print("is illegal ",edge,i,j,k,p)
+    assert(p ~= edge.vtx.id and p ~= edge.next.vtx.id)
+
     -- border edge is always legal
     if edge.face == nil or edge.opp.face == nil then
         return false
     end
 
-    local pi,pj,pl,pk = 
-        P[edge.vtx.id],
-        P[edge.next.vtx.id],
-        P[edge.next.next.vtx.id],
-        P[edge.opp.prev.vtx.id]
+    local i,j,k = edge.vtx.id,
+                  edge.next.vtx.id,
+                  edge.opp.prev.vtx.id
 
-    local a1 = angle(pj-pi,pl-pi)
-    local a2 = angle(pi-pl,pj-pl)
-    local a3 = angle(pl-pj,pi-pj)
-    local a4 = angle(pk-pi,pj-pi)
-    local a5 = angle(pi-pj,pk-pj)
-    local a6 = angle(pj-pk,pi-pk)
+    assert(i ~= j)
+    assert(j ~= k)
+    assert(k ~= p)
+    assert(p ~= i)
 
-    local a1p = angle(pk-pi,pl-pi)
-    local a2p = angle(pi-pl,pk-pl)
-    local a3p = angle(pl-pk,pi-pk)
-    local a4p = angle(pk-pl,pj-pl)
-    local a5p = angle(pj-pk,pl-pk)
-    local a6p = angle(pl-pj,pk-pj)
+    --[[
+    if i<0 or j<0 or k<0 or p<0 then
+        -- at most one of i,j is < 0
+        assert(i>=0 and j>=0 or (i<0) ~= (j<0)) -- xor
+        -- at most one of k,p is < 0
+        assert(k>=0 and p>=0 or (k<0) ~= (p<0)) -- xor
+        return math.min(k,p) >= math.min(i,j)
+    end
+    --]]
 
-    local A,B = math.min(a1,a2,a3,a4,a5,a6),
-                math.min(a1p,a2p,a3p,a4p,a5p,a6p)
-
---    print(pi,pk,pj,pl," -> ",pi,pj,": ",A,B,A < B and "NOT" or "ok")
-
-    return A < B, A, B
+    local center,radius = circumcircle(P[i], P[j], P[k])
+          
+    -- if p is in the interior of circumcircle, edge is illegal
+    return norm2(center-P[p]) <= radius*radius
 end
 
 
-function legalize_edge(mesh, P, edge, pr)
-    if is_illegal_edge(P, edge) then
-        mesh:flip_edge(edge)
-        printmesh(mesh,"flip_edge")
+function legalize_edge(mesh, P, dag, edge, p, trinode)
+    --print("legalize ",edge,p)
+    assert(edge.vtx.id ~= p)
+    assert(edge.next.vtx.id ~= p)
 
-        assert(not is_illegal_edge(P, edge), "should be a legal edge by now")
+    assert(edge.prev.vtx.id == p)
+    assert(edge.next.next.vtx.id == p)
 
-        if edge.prev.vtx.id == pr then
-            edge = edge.opp
+    if is_illegal_edge(P, edge, p) then
+        local msg = "flip "..tostring(edge).." p="..p
+        local did = mesh:flip_edge(edge)
+        assert(did)
+
+        local node, node_opp = trinode[edge.face.id], trinode[edge.opp.face.id]
+
+        local child = trinode:create(node,edge)
+        local child_opp = trinode:create(node,edge.opp)
+
+        if node_opp.children == nil then
+            node_opp.children = {}
         end
-        legalize_edge(mesh, P, edge.next, pr)
-        legalize_edge(mesh, P, edge.prev, pr)
+        node_opp.children[#node_opp.children+1] = child
+        node_opp.children[#node_opp.children+1] = child_opp
+
+        printmesh(P,mesh,dag, msg)
+
+        assert(not is_illegal_edge(P, edge, edge.prev.vtx.id), "should be a legal edge by now")
+
+        local e1 = edge.next
+              e2 = edge.opp.prev
+        local a = e2.vtx.id
+        local b = e2.next.vtx.id
+        legalize_edge(mesh, P, dag, e1, p, trinode)
+
+        if e2.vtx.id == a and e2.next.vtx.id == b then
+            legalize_edge(mesh, P, dag, e2, p, trinode)
+        end
     end
 end
 
-function triangulate(P)
-    local hull = hull_triangle(P)
-    P[-1] = hull[1]
-    P[-2] = hull[2]
-    P[-3] = hull[3]
+function add_vertex_interior(mesh, face, p)
+    return mesh:split_face(face, p)
+end
 
-    local dag = {}
-    dag[1] = -1
-    dag[2] = -2
-    dag[3] = -3
+function add_vertex_edge(mesh, edge, p)
+    local vtx = mesh:split_edge(edge, p)
+
+    -- then we create triangles on edge's face, linking the added vertex to
+    -- each vertex (minus 2)
+
+    if edge.face ~= nil then
+        mesh:triangulate(edge)
+    end
+
+    -- same thing on edge.opp.face
+
+    if edge.opp.face ~= nil then
+        mesh:triangulate(edge.opp.next)
+    end
+
+    return vtx
+end
+
+function bounds(P)
+    local max,min = Point:new(-1e10,-1e10), Point:new(1e10,1e10)
+
+    for _,p in pairs(P) do
+        min.x = math.min(min.x, p.x)
+        min.y = math.min(min.y, p.y)
+        max.x = math.max(max.x, p.x)
+        max.y = math.max(max.y, p.y)
+    end
+
+    return min,max
+end
+
+function mega_triangle(P)
+    local min,max = bounds(P)
+
+    local size = max-min
+    min = min - size/10
+    max = max + size/10
+
+    local w,h = max.x-min.x, max.y-min.y
+    local d = w/2
+    local c = w*h/(2*d)
+
+    return Point:new(min.x-d,min.y),
+           Point:new(max.x+d,min.y),
+           Point:new((min.x+max.x)/2, max.y+c)
+end
+
+function triangulate(P)
+    P = randomize(P)
+
+    --[[
+    local id0 = top_point(P)
+    P[0],P[id0] = P[id0],P[0]
 
     local mesh = Mesh:new()
-    dag.face = mesh:add_face(-1, -2, -3)
-    
-    local trinodes = {}
-    trinodes[dag.face.id] = dag
 
-    printmesh(mesh,"ini")
+    local root = {}
+    root[1] = 0
+    root[2] = -2
+    root[3] = -1
+
+    local f0  = mesh:add_face(0,-2,-1)
+    --]]
+
+    local trinode = {}
+    function trinode:create(parent,e)
+        local node = {tri = e.face}
+        node[1] = e.vtx.id
+        node[2] = e.next.vtx.id
+        node[3] = e.prev.vtx.id
+        if parent ~= nil then
+            node.level = parent.level+1
+            if parent.children == nil then
+                parent.children = {}
+            end
+            parent.children[#parent.children + 1] = node
+        else
+            node.level = 0
+        end
+
+        trinode[e.face.id] = node
+        return node
+    end
+
+    P[-1], P[-2], P[-3] = mega_triangle(P)
+
+    local mesh = Mesh:new()
+    local f0 =  mesh:add_face(-1,-2,-3)
+
+    local root = trinode:create(nil,f0[1])
+    
+    printmesh(P,mesh,root,"super triangle")
 
     for p,pr in pairs(P) do
         if p <= 0 then
             goto continue
         end
 
-        local tri = find_triangle(P, dag, p)
-        assert(tri ~= nil, "must have found a triangle")
+        local node = find_triangle(P, root, p)
+        assert(node ~= nil, "must have found a triangle")
 
-        if strictly_inside_triangle(P, tri, p) then
-            local vtx = mesh:split_face(tri.face, p)
-            printmesh(mesh,"split_face")
+        if strictly_inside_triangle(P, node, p) then
+            local msg = "split "..tostring(node.tri).." with "..p
+            local vtx = add_vertex_interior(mesh, node.tri, p)
 
-            tri.children = {}
+            local edges = {}
             for e in vtx:out_edges() do
-                legalize_edge(mesh, P, e.next, pr)
+                edges[#edges+1] = e
+                trinode:create(node,e)
+            end
 
-                local child = {face = e.face}
-                child[1] = e.vtx.id
-                child[2] = e.next.vtx.id
-                child[3] = e.next.next.vtx.id
-                
-                tri.children[#tri.children+1] = child
+            assert(#node.children == 3, "wrong number of children: "..#node.children)
 
-                trinodes[child.face.id] = child
+            printmesh(P,mesh,root,msg)
+
+            for i=1,#edges do
+                legalize_edge(mesh, P, root, edges[i].next, p, trinode)
             end
         else
-            local face = tri.face
-            local a,b,c = P[tri[1]], P[tri[2]], P[tri[3]]
+            local a,b,c = P[node[1]], P[node[2]], P[node[3]]
             local edge
             if are_collinear(a,b,pr) then
-                edge = face[1]
+                edge = node.tri[1]
             elseif are_collinear(b,c,pr) then
-                edge = face[2]
+                edge = node.tri[2]
             else 
-                assert(are_collinear(c,d,pr))
-                edge = face[3]
+                assert(are_collinear(c,a,pr))
+                edge = node.tri[3]
             end
 
-            local opp_vtx = edge.prev.vtx
+            local opp_tri = edge.opp.face
+            local opp_vtx, opp_node
 
-            local opp_tri = trinodes[edge.opp.face.id]
-            assert(opp_tri ~= nil)
+            if opp_tri ~= nil then
+                opp_vtx = edge.opp.prev.vtx
+                opp_node = trinode[opp_tri.id]
+                assert(opp_node ~= nil)
+            end
 
-            local vtx = mesh:split_edge(edge)
-            printmesh(mesh,"split_edge")
+            local msg = "split "..tostring(edge)
+            local vtx = add_vertex_edge(mesh, edge, p)
 
-            tri.children = {}
             for e in vtx:out_edges() do
-                legalize_edge(mesh, P, e.next, pr)
+                edges[#edges+1] = e
 
-                local child = {face = e.face}
-                child[1] = e.vtx.id
-                child[2] = e.next.vtx.id
-                child[3] = e.next.next.vtx.id
-                
                 if e.prev.vtx == opp_vtx then
-                    tri.children[#tri.children+1] = child
-                    trinodes[edge.face.id] = child
+                    if opp_node ~= nil then
+                        trinode:create(opp_node,e)
+                    end
                 else
-                    opp_tri.children[#opp_tri.children+1] = child
-                    trinodes[edge.opp.face.id] = child
+                    trinode:create(node,e)
                 end
+            end
+
+            printmesh(P,mesh,root,msg)
+
+            for i=1,#edges do
+                legalize_edge(mesh, P, root, edges[i].next, p, trinode)
             end
         end
 
@@ -303,84 +601,51 @@ function triangulate(P)
 
     for i=-3,-1 do
         mesh:remove_vertex(i)
-        printmesh(mesh,"remvtx_"..i)
         P[i] = nil
+        printmesh(P,mesh,nil,"Remove vertex "..i)
     end
 
-    return mesh
+    return mesh, P
 end
 
-P = {Point:new(0,0), Point:new(1,.9), Point:new(0,1), Point:new(1,1)}
---P = {Point:new(-10,11), Point:new(1,0), Point:new(31,11), Point:new(1,1)}
-
---[[
-mesh = Mesh:new()
-mesh:add_face(1,3,4)
-local f = mesh:add_face(3,1,2)
---mesh:flip_edge(f.edge)
-
-illegal, A, B = is_illegal_edge(P, f.edge)
-print(A,B)
-if illegal then
-    print "ILLEGAL"
-else
-    print "legal"
-end
-
-print("FLIP")
-mesh:flip_edge(f.edge)
-
-illegal, A, B = is_illegal_edge(P, f.edge)
-print(A,B)
-if illegal then
-    print "ILLEGAL"
-else
-    print "legal"
-end
-
-do return end
---]]
-
-mesh = triangulate(P)
-
-print([[
-%!PS-Adobe-3.0
-%%BoundingBox: -1 -1 2 2
-%%BeginSetup
-/W 612 def /H 792 def
-/radius 1 W div def
-/red {1 0 0} def
-/green {0 1 0} def
-/blue {0 0 1} def
-/white {1 1 1} def
-/black {0 0 0} def
-/p %% p(x,y)
-{
-    newpath radius 0 360 arc fill
-} def
-/line %% line(x1,y1,x2,y2)
-{
-    newpath 4 2 roll moveto lineto stroke
-} def
-
-20 20 translate
-W -40 add dup scale
-1 W div setlinewidth
-
-%%EndSetup
-]])
-
---print("1 0 0 setrbgcolor")
-
-for _,f in pairs(mesh.faces) do
-    for i=1,3 do
-        print(P[f[i].vtx.id].x, P[f[i].vtx.id].y, P[f[i%3+1].vtx.id].x, P[f[i%3+1].vtx.id].y, "line")
+function randomize(P)
+    for i=1,#P do
+        local j = i+math.floor(math.random()*(#P-i))
+        P[i],P[j] = P[j],P[i]
     end
+    return P
 end
 
---print("0 0 0 setrbgcolor")
-for _,p in pairs(P) do
-    print(p.x,p.y,"p")
+function output_gold(P, out)
+    local gP = {}
+    for _,p in pairs(P) do
+        gP[#gP+1] = gold.Point(p.x,p.y)
+    end
+
+    local mesh = gold.triangulate(gP)
+
+    ps_header(out, bounds(P))
+    out:write("meshctm setmatrix 1 W div setlinewidth\n")
+
+    for _,t in pairs(mesh2) do
+        out:write(t.p1.x," ",t.p1.y," ", t.p2.x, " ", t.p2.y, " line\n")
+        out:write(t.p2.x," ",t.p2.y," ", t.p3.x, " ", t.p3.y, " line\n")
+        out:write(t.p3.x," ",t.p3.y," ", t.p1.x, " ", t.p1.y, " line\n")
+    end
+
+    out:write("showpage\n")
 end
 
-print("showpage")
+function benchmark(N)
+    P = {}
+    for i=1,N do
+        P[#P+1] = Point:new(math.random(),math.random())
+    end
+
+    local clk = os.clock()
+    mesh,P = triangulate(P)
+    print("Elapsed: ",os.clock()-clk)
+end
+
+benchmark(10000)
+
