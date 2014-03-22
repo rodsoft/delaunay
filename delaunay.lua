@@ -1,8 +1,27 @@
-local hedge = require "hedge.hedge"
-local gold = require "gold"
+-- Delaunay Triangulation
+-- Author: Rodolfo Lima
+-- Creation:    2014/03/21
+-- Last update: 2014/03/21
 
-local Mesh = hedge.Mesh
-local trace = hedge.trace
+local M = {}
+
+M.setmetatable = setmetatable
+M.type = type
+M.pairs = pairs
+M.tostring = tostring
+M.assert = assert
+M.math = math
+M.require = require
+M.io = io
+M.file = file
+M.Mesh = require "hedge.hedge".Mesh
+M.print = print
+
+_ENV = M
+
+-- DEBUG STUFF -----------------------------------------------------{{{
+debug_mode = false
+output_algo = false
 
 function ps_header(out, min, max)
     min = min - (max-min)/10
@@ -38,7 +57,7 @@ function ps_header(out, min, max)
 
 /print
 {
-    3 1 roll moveto w h div 1 scale show h w div 1 scale 
+    3 1 roll moveto w h div 1 scale show h w div 1 scale
 } def
 
 0 H W sub 2 div translate
@@ -52,7 +71,10 @@ minx neg miny neg translate
     "\n")
 end
 
-function output_ps(P, mesh, dag, out, title)
+local function output_ps(P, mesh, dag, out, title)
+    assert(out ~= nil)
+    assert(P ~= nil)
+
     if title ~= nil then
         out:write(("titlefont setfont (%s) dup stringwidth pop W exch sub 2 div H moveto show\n")
                     :format(title))
@@ -76,6 +98,9 @@ vtxfont setfont
                     printer(child)
                 end
             else
+                assert(P ~= nil)
+                assert(out ~= nil)
+
                 out:write("newpath\n",
                           P[node[1]].x," ",P[node[1]].y," moveto\n",
                           P[node[2]].x," ",P[node[2]].y," lineto\n",
@@ -111,34 +136,54 @@ vtxfont setfont
     end
 end
 
-local idx = 1
-function printmesh(P, mesh, dag, msg)
-    do return end
+local mesh_output_stream
+local curpage
+-- output_mesh(fname or stream, P, mesh, dag, msg)
+-- output_mesh(P, mesh, dag, msg)
+function output_mesh(out, P, mesh, dag, msg)
+    if type(out)~="string" and (type(out)~="userdata" or out.write == nil) then
+        assert(msg == nil)
+        P, mesh, dag, msg = out, P, mesh, dag
 
-    local out
-    if idx == 1 then
-        out = io.open("algo.ps","w+")
+        if type(mesh_output_stream) == "string" then
+            out = io.open(out, "a+") -- append
+        else
+            out = mesh_output_stream
+        end
+        ps_header(out, bounds(P))
+        curpage = curpage + 1
+    else
+        mesh_output_stream = out
+        if type(out) == 'string' then
+            out = io.open(out, "w+") -- create a new file
+        else
+            out = mesh_output_stream
+        end
 
         ps_header(out, bounds(P))
-    else
-        out = io.open("algo.ps","a+")
+        curpage = 1
     end
 
-    out:write("%%Page ",idx," ",idx,"\n")
+    assert(P ~= nil)
+    assert(mesh ~= nil)
+
+    out:write("%%Page ",curpage," ",curpage,"\n")
 
     out:write("gsave\n")
-
     output_ps(P,mesh,dag,out,msg)
+    out:write("grestore\n")
 
-    out:write("grestore\n","showpage\n")
+    out:write("showpage\n")
 
-    out:close()
+    if out ~= mesh_output_stream then
+        out:close()
+    end
 
-    idx = idx+1
+    algo_file_created = true
 end
+--}}}
 
-
--- POINT ---------------------------------------------------------------
+-- POINT ---------------------------------------------------------------{{{
 
 Point = {}
 function Point:new(x,y)
@@ -155,15 +200,15 @@ function Point.__eq(a,b)
     return a.x==b.y and a.y==b.y
 end
 -- lexicographical order
-function Point.__lt(a,b) 
-    if a.x==b.x then 
+function Point.__lt(a,b)
+    if a.x==b.x then
         return a.y < b.y
     else
         return a.x < b.x
     end
 end
-function Point.__le(a,b) 
-    if a.x==b.x then 
+function Point.__le(a,b)
+    if a.x==b.x then
         return a.y <= b.y
     else
         return a.x <= b.x
@@ -173,14 +218,14 @@ function Point:__tostring()
     return "("..self.x..";"..self.y..")"
 end
 
-function are_collinear(a, b, c)
+local function are_collinear(a, b, c)
     local tol = math.abs(math.max(a.x,b.x,c.x,a.y,b.y,c.y))*1e-6
 
-    return math.abs(cross(b-a,c-a)) < tol
+    return math.abs(cross(Vector:new(b.x,b.y)-a,Vector:new(c.x,c.y)-a)) < tol
 end
-                
+--}}}
 
--- VECTOR ---------------------------------------------------------------
+-- VECTOR ---------------------------------------------------------------{{{
 
 Vector = { __sub = Point.__sub,
            __eq  = Point.__eq,
@@ -237,9 +282,11 @@ function angle(a,b)
     return math.acos(dot(unit(a), unit(b)))
 end
 
+--}}}
+
 ------------------------------------------------------------
 
-function top_point(P)
+local function top_point(P)
     local max = Point:new(-1e10,-1e10)
     local id0
 
@@ -250,12 +297,14 @@ function top_point(P)
         end
     end
 
-    --assert(id0 ~= nil)
+    if debug_mode then
+        assert(id0 ~= nil)
+    end
 
     return id0
 end
 
-function ccw(P, a, b, p)
+local function ccw(P, a, b, p)
     --[[
     if a < 0 or b < 0 then
         if a == -1 and b == -2 then
@@ -300,17 +349,17 @@ function ccw(P, a, b, p)
     return d00*d11 - d01*d10
 end
 
-function inside_triangle(P, tri, p)
+local function inside_triangle(P, tri, p)
     local a,b,c = tri[1], tri[2], tri[3]
     return ccw(P,a,b,p) <= 0 and ccw(P,b,c,p) <= 0 and ccw(P,c,a,p) <= 0
 end
 
-function strictly_inside_triangle(P, tri, p)
+local function strictly_inside_triangle(P, tri, p)
     local a,b,c = tri[1], tri[2], tri[3]
     return ccw(P,a,b,p) < 0 and ccw(P,b,c,p) < 0 and ccw(P,c,a,p) < 0
 end
 
-function find_triangle(P, node, p)
+local function find_triangle(P, node, p)
     if not inside_triangle(P, node, p) then
         return nil
     elseif node.children == nil then -- leaf node?
@@ -324,10 +373,12 @@ function find_triangle(P, node, p)
         end
     end
 
-    --assert(false, "must have found a triangle containing "..p.." ("..node[1].." "..node[2].." "..node[3]..")")
+    if debug_mode then
+        assert(false, "must have found a triangle containing "..p.." ("..node[1].." "..node[2].." "..node[3]..")")
+    end
 end
 
-function circumcircle(a,b,c)
+local function circumcircle(a,b,c)
     local D = (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y)) * 2
 
     local x = norm2(a) * (b.y - c.y) +
@@ -341,23 +392,27 @@ function circumcircle(a,b,c)
     local center = Point:new((x / D), (y / D))
 
 
-    local la,lb,lc = norm(a-b), norm(b-c), norm(c-a)
+    local la,lb,lc = norm(Vector:new(a.x,a.y)-b),
+                     norm(Vector:new(b.x,b.y)-c),
+                     norm(Vector:new(c.x,c.y)-a)
 
     -- area*4 of ijk triangle (use Heron's formula)
-    local area4 = math.sqrt((la+lb+lc)*(la+lb-lc)*(la-lb+lc)*(-la+lb+lc))
-    local radius = (la*lb*lc)/area4
+    local area4_2 = (la+lb+lc)*(la+lb-lc)*(la-lb+lc)*(-la+lb+lc)
+    local radius2 = (la*lb*lc)^2/area4_2
 
-    return center,radius
+    return center,radius2
 end
 
-function is_illegal_edge(P, edge, p)
+local function is_illegal_edge(P, edge, p)
 
     local i,j,k = edge.vtx.id,
                   edge.next.vtx.id,
                   edge.opp.prev.vtx.id
 
     --print("is illegal ",edge,i,j,k,p)
-    --assert(p ~= edge.vtx.id and p ~= edge.next.vtx.id)
+    if debug_mode then
+        assert(p ~= edge.vtx.id and p ~= edge.next.vtx.id)
+    end
 
     -- border edge is always legal
     if edge.face == nil or edge.opp.face == nil then
@@ -368,40 +423,49 @@ function is_illegal_edge(P, edge, p)
                   edge.next.vtx.id,
                   edge.opp.prev.vtx.id
 
-    --assert(i ~= j)
-    --assert(j ~= k)
-    --assert(k ~= p)
-    --assert(p ~= i)
+    if debug_mode then
+        assert(i ~= j)
+        assert(j ~= k)
+        assert(k ~= p)
+        assert(p ~= i)
+    end
 
     --[[
     if i<0 or j<0 or k<0 or p<0 then
         -- at most one of i,j is < 0
-        --assert(i>=0 and j>=0 or (i<0) ~= (j<0)) -- xor
+        assert(i>=0 and j>=0 or (i<0) ~= (j<0)) -- xor
         -- at most one of k,p is < 0
-        --assert(k>=0 and p>=0 or (k<0) ~= (p<0)) -- xor
+        assert(k>=0 and p>=0 or (k<0) ~= (p<0)) -- xor
         return math.min(k,p) >= math.min(i,j)
     end
     --]]
 
-    local center,radius = circumcircle(P[i], P[j], P[k])
-          
+    local center,radius2 = circumcircle(P[i], P[j], P[k])
+
     -- if p is in the interior of circumcircle, edge is illegal
-    return norm2(center-P[p]) <= radius*radius
+    return norm2(center-P[p]) <= radius2
 end
 
 
-function legalize_edge(mesh, P, dag, edge, p, trinode)
+local function legalize_edge(mesh, P, dag, edge, p, trinode)
     --print("legalize ",edge,p)
-    --assert(edge.vtx.id ~= p)
-    --assert(edge.next.vtx.id ~= p)
+    if debug_mode then
+        assert(edge.vtx.id ~= p)
+        assert(edge.next.vtx.id ~= p)
 
-    --assert(edge.prev.vtx.id == p)
-    --assert(edge.next.next.vtx.id == p)
+        assert(edge.prev.vtx.id == p)
+        assert(edge.next.next.vtx.id == p)
+    end
 
     if is_illegal_edge(P, edge, p) then
-        --local msg = "flip "..tostring(edge).." p="..p
+        local msg
+        if debug_mode then
+            msg = "flip "..tostring(edge).." p="..p
+        end
         local did = mesh:flip_edge(edge)
-        --assert(did)
+        if debug_mode then
+            assert(did)
+        end
 
         local node, node_opp = trinode[edge.face.id], trinode[edge.opp.face.id]
 
@@ -414,9 +478,12 @@ function legalize_edge(mesh, P, dag, edge, p, trinode)
         node_opp.children[#node_opp.children+1] = child
         node_opp.children[#node_opp.children+1] = child_opp
 
-        --printmesh(P,mesh,dag, msg)
-
-        --assert(not is_illegal_edge(P, edge, edge.prev.vtx.id), "should be a legal edge by now")
+        if output_algo then
+            output_mesh(P,mesh,dag, msg)
+        end
+        if debug_mode then
+            assert(not is_illegal_edge(P, edge, edge.prev.vtx.id), "should be a legal edge by now")
+        end
 
         local e1 = edge.next
               e2 = edge.opp.prev
@@ -430,11 +497,11 @@ function legalize_edge(mesh, P, dag, edge, p, trinode)
     end
 end
 
-function add_vertex_interior(mesh, face, p)
+local function add_vertex_interior(mesh, face, p)
     return mesh:split_face(face, p)
 end
 
-function add_vertex_edge(mesh, edge, p)
+local function add_vertex_edge(mesh, edge, p)
     local vtx = mesh:split_edge(edge, p)
 
     -- then we create triangles on edge's face, linking the added vertex to
@@ -466,8 +533,9 @@ function bounds(P)
     return min,max
 end
 
-function mega_triangle(P)
+local function mega_triangle(P)
     local min,max = bounds(P)
+    --[[
 
     local size = max-min
     min = min - size/10
@@ -480,11 +548,29 @@ function mega_triangle(P)
     return Point:new(min.x-d,min.y),
            Point:new(max.x+d,min.y),
            Point:new((min.x+max.x)/2, max.y+c)
+           --]]
+
+  local dx, dy = max.x - min.x, max.y - min.y
+  local deltaMax = math.max(dx, dy)
+  local midx, midy = (min.x + max.x) * 0.5, (min.y + max.y) * 0.5
+
+  local p1 = Point:new(midx - 2 * deltaMax, midy - deltaMax)
+  local p2 = Point:new(midx, midy + 2 * deltaMax)
+  local p3 = Point:new(midx + 2 * deltaMax, midy - deltaMax)
+
+  return p1,p3,p2
+end
+
+function randomize(P)
+    --  http://en.wikipedia.org/wiki/Fisher-Yates_shuffle
+    for i=#P,2,-1 do
+        local j = math.random(i)
+        P[i],P[j] = P[j],P[i]
+    end
+    return P
 end
 
 function triangulate(P)
-    P = randomize(P)
-
     --[[
     local id0 = top_point(P)
     P[0],P[id0] = P[id0],P[0]
@@ -524,19 +610,27 @@ function triangulate(P)
     root[2] = f0[2].vtx.id
     root[3] = f0[3].vtx.id
     trinode[f0.id] = root
-    
-    --printmesh(P,mesh,root,"super triangle")
+
+    if output_algo then
+        output_mesh("algo.ps", P,mesh,root,"super triangle")
+    end
 
     for p,pr in pairs(P) do
+
         if p <= 0 then
             goto continue
         end
 
         local node = find_triangle(P, root, p)
-        --assert(node ~= nil, "must have found a triangle")
+        if debug_mode then
+            assert(node ~= nil, "must have found a triangle")
+        end
 
         if strictly_inside_triangle(P, node, p) then
-            --local msg = "split "..tostring(node.tri).." with "..p
+            local msg
+            if debug_mode then
+                msg = "split "..tostring(node.tri).." with "..p
+            end
             local vtx = add_vertex_interior(mesh, node.tri, p)
 
             local edges = {}
@@ -545,9 +639,14 @@ function triangulate(P)
                 trinode:create(node,e)
             end
 
-            --assert(#node.children == 3, "wrong number of children: "..#node.children)
+            if output_algo then
+                output_mesh(P,mesh,root,msg)
+            end
 
-            --printmesh(P,mesh,root,msg)
+            if debug_mode then
+                assert(#node.children == 3, "wrong number of children: "..#node.children)
+            end
+
 
             for i=1,#edges do
                 legalize_edge(mesh, P, root, edges[i].next, p, trinode)
@@ -559,8 +658,10 @@ function triangulate(P)
                 edge = node.tri[1]
             elseif are_collinear(b,c,pr) then
                 edge = node.tri[2]
-            else 
-                --assert(are_collinear(c,a,pr))
+            else
+                if debug_mode then
+                    assert(are_collinear(c,a,pr))
+                end
                 edge = node.tri[3]
             end
 
@@ -570,12 +671,18 @@ function triangulate(P)
             if opp_tri ~= nil then
                 opp_vtx = edge.opp.prev.vtx
                 opp_node = trinode[opp_tri.id]
-                --assert(opp_node ~= nil)
+                if debug_mode then
+                    assert(opp_node ~= nil)
+                end
             end
 
-            --local msg = "split "..tostring(edge)
+            local msg
+            if debug_mode then
+                msg = "split "..tostring(edge)
+            end
             local vtx = add_vertex_edge(mesh, edge, p)
 
+            local edges = {}
             for e in vtx:out_edges() do
                 edges[#edges+1] = e
 
@@ -588,7 +695,9 @@ function triangulate(P)
                 end
             end
 
-            --printmesh(P,mesh,root,msg)
+            if output_algo then
+                output_mesh(P,mesh,root,msg)
+            end
 
             for i=1,#edges do
                 legalize_edge(mesh, P, root, edges[i].next, p, trinode)
@@ -601,51 +710,12 @@ function triangulate(P)
     for i=-3,-1 do
         mesh:remove_vertex(i)
         P[i] = nil
-        --printmesh(P,mesh,nil,"Remove vertex "..i)
+        if output_algo then
+            output_mesh(P,mesh,nil,"Remove vertex "..i)
+        end
     end
 
     return mesh, P
 end
 
-function randomize(P)
-    --  http://en.wikipedia.org/wiki/Fisher-Yates_shuffle
-    for i=#P,2,-1 do
-        local j = math.random(i)
-        P[i],P[j] = P[j],P[i]
-    end
-    return P
-end
-
-function output_gold(P, out)
-    local gP = {}
-    for _,p in pairs(P) do
-        gP[#gP+1] = gold.Point(p.x,p.y)
-    end
-
-    local mesh = gold.triangulate(gP)
-
-    ps_header(out, bounds(P))
-    out:write("meshctm setmatrix 1 W div setlinewidth\n")
-
-    for _,t in pairs(mesh2) do
-        out:write(t.p1.x," ",t.p1.y," ", t.p2.x, " ", t.p2.y, " line\n")
-        out:write(t.p2.x," ",t.p2.y," ", t.p3.x, " ", t.p3.y, " line\n")
-        out:write(t.p3.x," ",t.p3.y," ", t.p1.x, " ", t.p1.y, " line\n")
-    end
-
-    out:write("showpage\n")
-end
-
-function benchmark(N)
-    P = {}
-    for i=1,N do
-        P[#P+1] = Point:new(math.random(),math.random())
-    end
-
-    local clk = os.clock()
-    mesh,P = triangulate(P)
-    print("Elapsed: ",os.clock()-clk)
-end
-
-benchmark(10000)
-
+return M
