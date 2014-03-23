@@ -35,8 +35,6 @@ function trace(...)
     io.stderr:write("\n")
 end
 
-symbolic_supertriangle = false
-
 function ps_header(out, min, max)
     min = min - (max-min)/10
     max = max + (max-min)/10
@@ -364,7 +362,7 @@ end
 
 -- ccw < 0 -> to the left
 local function ccw(P, a, b, p)
-    if symbolic_supertriangle and (a < 0 or b < 0) then
+    if a < 0 or b < 0 then
         if a == -1 and b == -2 then
             return 1
         elseif a == -2 and b == -1 then
@@ -511,18 +509,19 @@ local function is_illegal_edge(P, edge, p)
         assert(p >= 0)
     end
 
-    if symbolic_supertriangle and (i<0 or j<0 or k<0) then
-        -- at most one of i,j is < 0
-        assert(i>=0 and j>=0 or (i<0) ~= (j<0)) -- xor
-        -- at most one of k,p is < 0
-        assert(k>=0 and p>=0 or (k<0) ~= (p<0)) -- xor
+    if i<0 or j<0 or k<0 then
+        if enable_debug then
+            -- at most one of i,j is < 0
+            assert(i>=0 and j>=0 or (i<0) ~= (j<0)) -- xor
+            -- at most one of k,p is < 0
+            assert(k>=0 and p>=0 or (k<0) ~= (p<0)) -- xor
+        end
 
         if k<0 then
             return false
         elseif i < 0 then
             return ccw(P, p, k, j) < 0
         else
-            assert(j < 0)
             return ccw(P, p, k, i) >= 0
         end
     end
@@ -622,22 +621,6 @@ function bounds(P)
     return min,max
 end
 
-local function mega_triangle(P)
-    local min,max = bounds(P)
-
-    local size = max-min
-    min = min - size*10
-    max = max + size*10
-
-    local w,h = max.x-min.x, max.y-min.y
-    local d = w/2
-    local c = w*h/(2*d)
-
-    return Point:new(min.x-d,min.y),
-           Point:new(max.x+d,min.y),
-           Point:new((min.x+max.x)/2, max.y+c)
-end
-
 function randomize(P)
     --  http://en.wikipedia.org/wiki/Fisher-Yates_shuffle
     for i=#P,2,-1 do
@@ -664,16 +647,8 @@ function triangulate(P)
     end
 
     local mesh = Mesh:new()
-
-    local f0, id0
-
-    if symbolic_supertriangle then
-        id0 = top_point(P)
-        f0 =  mesh:add_face(id0,-2,-1)
-    else
-        P[-1], P[-2], P[-3] = mega_triangle(P)
-        f0 =  mesh:add_face(-1,-2,-3)
-    end
+    local id0 = top_point(P)
+    local f0 =  mesh:add_face(id0,-2,-1)
 
     local root = {tri = f0}
     root[1] = f0[1].vtx.id
@@ -686,7 +661,7 @@ function triangulate(P)
     end
 
     for p,pr in pairs(P) do
-        if p <= 0 or p == id0 then
+        if p < 0 or p == id0 then
             goto continue
         end
 
@@ -790,7 +765,7 @@ function triangulate(P)
         ::continue::
     end
 
-    for i=-3,-1 do
+    for i=-2,-1 do
         mesh:remove_vertex(i)
         P[i] = nil
         if output_algo then
