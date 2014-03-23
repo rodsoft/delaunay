@@ -1,7 +1,9 @@
 -- Delaunay Triangulation
--- Author: Rodolfo Lima
+-- Author: Rodolfo Schulz de Lima
 -- Creation:    2014/03/21
--- Last update: 2014/03/21
+-- Last update: 2014/03/23
+
+-- Ref: Mark de Berg et al. - Computational Geometry, 3rd ed, chapter 9
 
 local M = {}
 
@@ -519,6 +521,10 @@ local function is_illegal_edge(P, edge, p)
             assert(k>=0 and p>=0 or (k<0) ~= (p<0)) -- xor
         end
 
+        -- in reference chapter it says:
+        -- edge i-j is legal if and only if min(k,p) < min(i,j)
+        -- this is *wrong*, we must ensure the quadrilateral is convex 
+        -- as for concave quadrilaterals the edge is always legal
         if k<0 then
             return false
         elseif i < 0 then
