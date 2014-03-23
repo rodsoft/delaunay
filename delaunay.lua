@@ -30,7 +30,7 @@ function trace(...)
         if _ > 1 then
             io.stderr:write(" ")
         end
-        io.stderr:write(s)
+        io.stderr:write(tostring(s))
     end
     io.stderr:write("\n")
 end
@@ -91,17 +91,12 @@ local function output_ps(P, mesh, dag, out, title)
     assert(out ~= nil)
     assert(P ~= nil)
 
-    if title ~= nil then
-        out:write(("titlefont setfont (%s) dup stringwidth pop W exch sub 2 div H moveto show\n")
-                    :format(title))
-    end
-
     local in_red = false
 
     out:write([[
 
 0 0 1 setrgbcolor
-1 W div setlinewidth
+.2 W div setlinewidth
 meshctm setmatrix
 vtxfont setfont
 
@@ -120,15 +115,49 @@ vtxfont setfont
                 assert(out ~= nil)
 
                 local a,b,c = P[node[1]],P[node[2]],P[node[3]]
+                local d
 
-                if a ~= nil and b ~= nil and c ~= nil then
-                    out:write("newpath\n",
-                              a.x," ",a.y," moveto\n",
-                              b.x," ",b.y," lineto\n",
-                              c.x," ",c.y," lineto\n",
-                              math.random()," ",math.random()," ",math.random()," setrgbcolor\n",
-                              "closepath fill\n")
+                -- rotate vertices so that nils come first
+                if b == nil and c == nil then
+                    a,b,c = b,c,a
+                    node[1],node[2],node[3] = node[2],node[3],node[1]
+                elseif c == nil and a == nil then
+                    a,b,c = c,a,b
+                    node[1],node[2],node[3] = node[3],node[1],node[2]
+                elseif a == nil and b == nil then
+                elseif b == nil then
+                    a,b,c = b,c,a
+                    node[1],node[2],node[3] = node[2],node[3],node[1]
+                elseif c == nil then
+                    a,b,c = c,a,b
+                    node[1],node[2],node[3] = node[3],node[1],node[2]
                 end
+
+                if a == nil and b == nil then
+                    assert(node[1] == -2)
+                    assert(node[2] == -1)
+
+                    a = {x=-100,y=c.y}
+                    b = {x=100,y=c.y}
+                    d = {x=100, y=-100}
+                elseif a == nil then
+                    if node[1] == -2 then
+                        a = {x=-100,y=c.y}
+                        d = {x=-100,y=b.y}
+                    else
+                        assert(node[1] == -1)
+                        a = {x=100,y=c.y}
+                        d = {x=100,y=b.y}
+                    end
+                end
+
+                out:write("newpath\n",
+                          a.x," ",a.y," moveto\n",
+                          d ~= nil and (d.x.." "..d.y.." lineto\n") or "",
+                          b.x," ",b.y," lineto\n",
+                          c.x," ",c.y," lineto\n",
+                          math.random()," ",math.random()," ",math.random()," setrgbcolor\n",
+                          "closepath fill\n")
             end
         end
 
@@ -148,17 +177,36 @@ vtxfont setfont
 
         local a,b = P[e.vtx.id], P[e.next.vtx.id]
 
-        if a ~= nil and b ~= nil then
+        if a ~= nil or b ~= nil then
+            if a == nil then
+                if e.vtx.id == -2 then
+                    a = {x=-100,y=b.y}
+                else
+                    a = {x=100,y=b.y}
+                end
+            elseif b == nil then
+                if e.next.vtx.id == -2 then
+                    b = {x=-100,y=a.y}
+                else
+                    b = {x=100,y=a.y}
+                end
+            end
             out:write(a.x, " ",a.y, " ", b.x, " ", b.y, " line\n")
         end
     end
 
-    if #P < 10 then
+    if true or #P < 10 then
         out:write("0 0 0 setrgbcolor\n")
         for _,p in pairs(P) do
             out:write(p.x," ",p.y," (",_,") print\n")
         end
     end
+
+    if title ~= nil then
+        out:write(("matrix defaultmatrix setmatrix titlefont setfont (%s) dup stringwidth pop W exch sub 2 div H moveto show\n")
+                    :format(title))
+    end
+
 end
 
 local mesh_output_stream
