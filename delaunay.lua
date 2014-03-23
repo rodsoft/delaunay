@@ -353,24 +353,6 @@ end
 
 ------------------------------------------------------------
 
-local function top_point(P)
-    local max = Point:new(-1e10,-1e10)
-    local id0
-
-    for i=1,#P do
-        if P[i].y > max.y or P[i].y == max.y and P[i].x > max.x then
-            max = P[i]
-            id0 = i
-        end
-    end
-
-    if debug_mode then
-        assert(id0 ~= nil)
-    end
-
-    return id0
-end
-
 -- order y, then x
 local function ptgt(a,b)
     if a.y == b.y then
@@ -437,6 +419,25 @@ local function strictly_inside_triangle(P, tri, p)
     local a,b,c = tri[1], tri[2], tri[3]
     return ccw(P,a,b,p) < 0 and ccw(P,b,c,p) < 0 and ccw(P,c,a,p) < 0
 end
+
+local function top_point(P)
+    local max = Point:new(-1e10,-1e10)
+    local id0
+
+    for i=1,#P do
+        if ptgt(P[i],max) then
+            max = P[i]
+            id0 = i
+        end
+    end
+
+    if debug_mode then
+        assert(id0 ~= nil)
+    end
+
+    return id0
+end
+
 
 local function find_triangle(P, node, p)
     if not inside_triangle(P, node, p) then
