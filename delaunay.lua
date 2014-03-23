@@ -506,14 +506,23 @@ local function is_illegal_edge(P, edge, p)
         assert(j ~= k)
         assert(k ~= p)
         assert(p ~= i)
+        assert(p >= 0)
     end
 
-    if symbolic_supertriangle and (i<0 or j<0 or k<0 or p<0) then
+    if symbolic_supertriangle and (i<0 or j<0 or k<0) then
         -- at most one of i,j is < 0
         assert(i>=0 and j>=0 or (i<0) ~= (j<0)) -- xor
         -- at most one of k,p is < 0
         assert(k>=0 and p>=0 or (k<0) ~= (p<0)) -- xor
-        return math.min(k,p) >= math.min(i,j)
+
+        if k<0 then
+            return false
+        elseif i < 0 then
+            return ccw(P, p, k, j) < 0
+        else
+            assert(j < 0)
+            return ccw(P, p, k, i) >= 0
+        end
     end
 
     local center,r2 = circumcircle(P[i], P[j], P[k])
@@ -530,8 +539,10 @@ end
 
 
 local function legalize_edge(mesh, P, dag, edge, p, trinode)
-    --print("legalize ",edge,p)
     if debug_mode then
+        if enable_trace then
+            trace("legalize i=",edge.vtx.id,"j=",edge.next.vtx.id,"k=",edge.opp.prev.vtx.id,"p=",p)
+        end
         assert(edge.vtx.id ~= p)
         assert(edge.next.vtx.id ~= p)
 
@@ -565,7 +576,7 @@ local function legalize_edge(mesh, P, dag, edge, p, trinode)
             output_mesh(P,mesh,dag, msg)
         end
         if debug_mode then
-            assert(not is_illegal_edge(P, edge, edge.prev.vtx.id), "should be a legal edge by now")
+            assert(edge.prev.vtx.id < 0 or not is_illegal_edge(P, edge, edge.prev.vtx.id), "should be a legal edge by now")
         end
 
         legalize_edge(mesh, P, dag, edge.next, p, trinode)

@@ -3,8 +3,8 @@ local gold = require "gold"
 
 d.debug_mode = true
 d.hedge_module.debug_mode = true
-d.hedge_module.enable_trace = true
-d.enable_trace = true
+d.hedge_module.enable_trace = false
+d.enable_trace = false
 d.symbolic_supertriangle = false
 
 function gen_points(N)
