@@ -698,25 +698,26 @@ function triangulate(P)
                 legalize_edge(mesh, P, root, edges[i].next, p, trinode)
             end
         else
+            local a,b,c = node.tri[1].vtx.id, node.tri[2].vtx.id, node.tri[3].vtx.id
             local edge
-            if are_collinear(P, node[1], node[2], p) then
+            if are_collinear(P, a, b, p) then
                 if enable_trace then
-                    trace(node[1], node[2], p, " collinear")
+                    trace(a, b, p, " collinear")
                 end
-                edge = mesh:get_edge(node[1],node[2])
-            elseif are_collinear(P, node[2], node[3], p) then
+                edge = node.tri[1]
+            elseif are_collinear(P, b, c, p) then
                 if enable_trace then
-                    trace(node[2], node[3], p, " collinear")
+                    trace(b, c, p, " collinear")
                 end
-                edge = mesh:get_edge(node[2],node[3])
+                edge = node.tri[2]
             else
                 if enable_trace then
-                    trace(node[3], node[1], p, " collinear")
+                    trace(c, a, p, " collinear")
                 end
                 if debug_mode then
-                    assert(are_collinear(P, node[3], node[1], p))
+                    assert(are_collinear(P, c, a, p))
                 end
-                edge = mesh:get_edge(node[3],node[1])
+                edge = node.tri[3]
             end
 
             local opp_tri = edge.opp.face
