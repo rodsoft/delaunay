@@ -71,12 +71,13 @@ function ps_header(out, min, max)
 
 /print
 {
-    3 1 roll moveto w h div 1 scale show h w div 1 scale
+    3 1 roll moveto show
 } def
 
 0 H W sub 2 div translate
 W dup scale
-1 w div 1 h div scale
+1 w div 1 w div scale
+0 h w sub 2 div neg translate
 minx neg miny neg translate
 /meshctm matrix currentmatrix def
 
