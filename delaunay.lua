@@ -444,8 +444,10 @@ local function find_triangle(P, node, p)
         return node
     end
 
-    for i,child in pairs(node.children) do
-        local tri = find_triangle(P, child, p)
+    local children = node.children
+
+    for i=1,#children do
+        local tri = find_triangle(P, children[i], p)
         if tri ~= nil then
             return tri
         end
