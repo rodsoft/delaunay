@@ -1,0 +1,50 @@
+%!PS-Adobe-3.0
+%%BoundingBox: -0.048179 0.246558 1.058921 0.571293
+%%EndComments
+%%BeginSetup
+/minx -0.048179 def /miny 0.246558 def /maxx 1.058921 def /maxy 0.571293 def
+/W 612 def /H 792 def
+/w maxx minx sub def /h maxy miny sub def
+/radius 1 W div def
+/red {1 0 0} def
+/green {0 1 0} def
+/blue {0 0 1} def
+/white {1 1 1} def
+/black {0 0 0} def
+/p %% p(x,y)
+{
+    newpath radius 0 360 arc fill
+} def
+/line %% line(x1,y1,x2,y2)
+{
+    newpath 4 2 roll moveto lineto stroke
+} def
+
+/vtxfont /Times-Roman findfont 20 h mul H div scalefont def
+/titlefont /Times-Roman findfont 30 scalefont def
+
+/print
+{
+    3 1 roll moveto show
+} def
+
+0 H W sub 2 div translate
+W dup scale
+1 w div 1 w div scale
+0 h w sub 2 div neg translate
+minx neg miny neg translate
+/meshctm matrix currentmatrix def
+
+matrix defaultmatrix setmatrix
+
+%%EndSetup
+
+meshctm setmatrix 1 W div setlinewidth
+0.043317308203931 0.41309616780518 0.088694422547098 0.5417717241411 line
+0.043317308203931 0.41309616780518 0.36104956705172 0.27339528001537 line
+0.088694422547098 0.5417717241411 0.36104956705172 0.27339528001537 line
+0.088694422547098 0.5417717241411 0.66960825895407 0.53970556684756 line
+0.36104956705172 0.27339528001537 0.66960825895407 0.53970556684756 line
+0.36104956705172 0.27339528001537 0.95827578518459 0.42971404335914 line
+0.66960825895407 0.53970556684756 0.95827578518459 0.42971404335914 line
+showpage

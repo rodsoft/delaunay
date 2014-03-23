@@ -1,0 +1,48 @@
+%!PS-Adobe-3.0
+%%BoundingBox: -0.100000 -0.100000 1.110000 1.110000
+%%EndComments
+%%BeginSetup
+/minx -0.100000 def /miny -0.100000 def /maxx 1.110000 def /maxy 1.110000 def
+/W 612 def /H 792 def
+/w maxx minx sub def /h maxy miny sub def
+/radius 1 W div def
+/red {1 0 0} def
+/green {0 1 0} def
+/blue {0 0 1} def
+/white {1 1 1} def
+/black {0 0 0} def
+/p %% p(x,y)
+{
+    newpath radius 0 360 arc fill
+} def
+/line %% line(x1,y1,x2,y2)
+{
+    newpath 4 2 roll moveto lineto stroke
+} def
+
+/vtxfont /Times-Roman findfont 20 h mul H div scalefont def
+/titlefont /Times-Roman findfont 30 scalefont def
+
+/print
+{
+    3 1 roll moveto show
+} def
+
+0 H W sub 2 div translate
+W dup scale
+1 w div 1 w div scale
+0 h w sub 2 div neg translate
+minx neg miny neg translate
+/meshctm matrix currentmatrix def
+
+matrix defaultmatrix setmatrix
+
+%%EndSetup
+
+meshctm setmatrix 1 W div setlinewidth
+0 0 0.5 0.5 line
+0 0 1 0 line
+0.5 0.5 1 0 line
+0.5 0.5 1 1 line
+1 0 1 1 line
+showpage

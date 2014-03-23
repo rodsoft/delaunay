@@ -1,5 +1,4 @@
 local d = require "delaunay"
-local gold = require "gold"
 
 d.debug_mode = true
 d.hedge_module.debug_mode = true
@@ -84,35 +83,6 @@ function output_my(P, out)
     out:write("showpage\n")
 end
 
-function output_gold(iP, out)
-    out = out or io.stdout
-
-    local P = {}
-    for i=1,#iP do
-        P[#P+1] = gold.Point(iP[i].x, iP[i].y)
-    end
-
-    local mesh = gold.triangulate(P)
-
-    local edges = {}
-    for _,t in pairs(mesh) do
-        edges[#edges+1] = {t.p1,t.p2}
-        edges[#edges+1] = {t.p2,t.p3}
-        edges[#edges+1] = {t.p3,t.p1}
-    end
-
-    edges = remove_duplicated_edges(edges)
-
-    d.ps_header(out, d.bounds(P))
-    out:write("meshctm setmatrix 1 W div setlinewidth\n")
-
-    for _,e in ipairs(edges) do
-        out:write(e[1].x," ",e[1].y," ", e[2].x, " ", e[2].y, " line\n")
-    end
-
-    out:write("showpage\n")
-end
-
 function benchmark(N)
     d.debug_mode = false
     d.hedge_module.debug_mode = false
@@ -144,9 +114,7 @@ math.randomseed(666)
 if arg[1] == "bench" then
     print("Benchmark N="..arg[2])
     benchmark(tonumber(arg[2]))
-elseif arg[1] == "gold" then
-    output_gold(get_points(arg[2]))
-elseif arg[1] == "my" then
-    output_my(get_points(arg[2]))
+else
+    output_my(get_points(arg[1]))
 end
 
