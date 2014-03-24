@@ -655,8 +655,9 @@ function triangulate(P)
     end
 
     local mesh = Mesh:new()
-    local id0 = top_point(P)
-    local f0 =  mesh:add_face(id0,-2,-1)
+    local pt_top = top_point(P)
+    P[1], P[pt_top] = P[pt_top], P[1]
+    local f0 = mesh:add_face(1,-2,-1)
 
     local root = {tri = f0}
     root[1] = f0[1].vtx.id
@@ -668,11 +669,8 @@ function triangulate(P)
         output_mesh("algo.ps", P,mesh,root,"super triangle")
     end
 
-    for p,pr in pairs(P) do
-        if p < 0 or p == id0 then
-            goto continue
-        end
-
+    -- skip top point, id==1
+    for p=2,#P do
         local node = find_triangle(P, root, p)
         if debug_mode then
             assert(node ~= nil, "must have found a triangle")
@@ -770,17 +768,19 @@ function triangulate(P)
                 legalize_edge(mesh, P, root, edges[i].next, p, trinode)
             end
         end
-
-        ::continue::
     end
 
     for i=-2,-1 do
         mesh:remove_vertex(i)
-        P[i] = nil
         if output_algo then
             output_mesh(P,mesh,nil,"Remove vertex "..i)
         end
     end
+
+    -- swap back top point to its original position
+    P[1], P[pt_top] = P[pt_top], P[1]
+    mesh.vertices[1].id, mesh.vertices[pt_top].id
+        = mesh.vertices[pt_top].id, mesh.vertices[1].id
 
     return mesh, P
 end
