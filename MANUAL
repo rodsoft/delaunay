@@ -1,0 +1,18 @@
+Usage:
+
+d = require "delaunay"
+
+P = {}
+for i=1,1000 do
+    P[#P+1] = {x=math.random(), y=math.random()}
+end
+
+mesh = d.triangulate(P)
+
+-- loop through all triangles
+for _,f in pairs(mesh.faces) do
+    print('--- Face ',_)
+    for i=1,3 do
+        print(f[i].vtx.id,'->',f[i].next.vtx.id)
+    end
+end
